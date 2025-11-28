@@ -46,7 +46,7 @@ chrome-extension/*.crx
 .DS_Store
 Thumbs.db
 desktop.ini
-Icon?
+
 
 # Editor / IDE settings
 .vscode/
