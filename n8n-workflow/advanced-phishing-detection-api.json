@@ -1,0 +1,372 @@
+{
+  "name": "Advanced Phishing Detection API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "phishing-check",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+      "name": "Webhook - Phishing Check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 400],
+      "webhookId": "legitly-phishing-check"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "url",
+              "value": "={{ $json.body.url || $json.url }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "domain",
+              "value": "={{ $json.body.domain || $json.domain }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "pageTitle",
+              "value": "={{ $json.body.pageTitle || $json.pageTitle || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "4",
+              "name": "hasLoginForm",
+              "value": "={{ $json.body.hasLoginForm || $json.hasLoginForm || false }}",
+              "type": "boolean"
+            },
+            {
+              "id": "5",
+              "name": "hasPasswordField",
+              "value": "={{ $json.body.hasPasswordField || $json.hasPasswordField || false }}",
+              "type": "boolean"
+            },
+            {
+              "id": "6",
+              "name": "isHttps",
+              "value": "={{ $json.body.isHttps !== false }}",
+              "type": "boolean"
+            },
+            {
+              "id": "7",
+              "name": "suspiciousKeywords",
+              "value": "={{ $json.body.suspiciousKeywords || $json.suspiciousKeywords || [] }}",
+              "type": "array"
+            },
+            {
+              "id": "8",
+              "name": "brandIndicators",
+              "value": "={{ $json.body.brandIndicators || $json.brandIndicators || [] }}",
+              "type": "array"
+            },
+            {
+              "id": "9",
+              "name": "formActions",
+              "value": "={{ $json.body.formActions || $json.formActions || [] }}",
+              "type": "array"
+            },
+            {
+              "id": "10",
+              "name": "pageLength",
+              "value": "={{ $json.body.pageLength || $json.pageLength || 0 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-6789-01bc-def2-234567890abc",
+      "name": "Extract Input Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ==========================================\n// LEGITLY PHISHING DETECTION ENGINE v2.5\n// Advanced Multi-Factor Analysis\n// ==========================================\n\nconst url = $input.first().json.url || '';\nconst domain = $input.first().json.domain || '';\nconst title = $input.first().json.pageTitle || '';\nconst hasLoginForm = $input.first().json.hasLoginForm || false;\nconst hasPasswordField = $input.first().json.hasPasswordField || false;\nconst suspiciousKeywords = $input.first().json.suspiciousKeywords || [];\nconst brandIndicators = $input.first().json.brandIndicators || [];\nconst isHttps = $input.first().json.isHttps !== false;\nconst formActions = $input.first().json.formActions || [];\nconst pageLength = $input.first().json.pageLength || 0;\n\nlet score = 0;\nlet maxScore = 0;\nlet flags = [];\nlet details = {};\n\n// ==========================================\n// 1. DOMAIN ANALYSIS (35 points)\n// ==========================================\nmaxScore += 35;\n\n// 1.1 IP Address Domain (15 points)\nconst ipv4Pattern = /^(\\d{1,3}\\.){3}\\d{1,3}$/;\nconst ipv6Pattern = /^\\[?[0-9a-fA-F:]+\\]?$/;\nif (ipv4Pattern.test(domain) || ipv6Pattern.test(domain)) {\n  score += 15;\n  flags.push({ type: 'critical', severity: 10, message: 'Domain is an IP address - highly suspicious' });\n  details.ipDomain = true;\n}\n\n// 1.2 Suspicious TLDs\nconst highRiskTLDs = ['.tk', '.ml', '.ga', '.cf', '.gq', '.top', '.xyz', '.work', '.click', '.link', '.info', '.online', '.site', '.website', '.space', '.pw', '.cc', '.ws', '.buzz', '.surf', '.loan', '.win', '.bid', '.download'];\nconst mediumRiskTLDs = ['.ru', '.cn', '.br', '.in', '.id', '.vn', '.ke', '.ng'];\n\nfor (const tld of highRiskTLDs) {\n  if (domain.toLowerCase().endsWith(tld)) {\n    score += 10;\n    flags.push({ type: 'warning', severity: 7, message: `High-risk TLD detected: ${tld}` });\n    details.suspiciousTLD = tld;\n    break;\n  }\n}\n\nif (!details.suspiciousTLD) {\n  for (const tld of mediumRiskTLDs) {\n    if (domain.toLowerCase().endsWith(tld)) {\n      score += 5;\n      flags.push({ type: 'info', severity: 4, message: `Medium-risk TLD: ${tld}` });\n      details.suspiciousTLD = tld;\n      break;\n    }\n  }\n}\n\n// 1.3 Domain Length (5 points)\nif (domain.length > 40) {\n  score += 5;\n  flags.push({ type: 'warning', severity: 5, message: `Unusually long domain name (${domain.length} chars)` });\n  details.longDomain = domain.length;\n}\n\n// 1.4 Excessive Subdomains (5 points)\nconst subdomainCount = (domain.match(/\\./g) || []).length;\nif (subdomainCount > 3) {\n  score += 5;\n  flags.push({ type: 'warning', severity: 6, message: `Excessive subdomains (${subdomainCount} levels)` });\n  details.subdomainCount = subdomainCount;\n}\n\n// ==========================================\n// 2. BRAND IMPERSONATION (40 points)\n// ==========================================\nmaxScore += 40;\n\nconst protectedBrands = [\n  { name: 'PayPal', keywords: ['paypal'], domains: ['paypal.com', 'paypal.me'], typos: ['paypa1', 'paypall', 'paypaI', 'pay-pal', 'paypai', 'peypal', 'paypl', 'paypol', 'paypaI'] },\n  { name: 'Google', keywords: ['google', 'gmail', 'youtube'], domains: ['google.com', 'gmail.com', 'youtube.com', 'gstatic.com', 'googleapis.com'], typos: ['g00gle', 'googIe', 'gooogle', 'go0gle', 'goog1e', 'googel', 'gogle', 'g0ogle'] },\n  { name: 'Microsoft', keywords: ['microsoft', 'outlook', 'office', 'onedrive', 'azure'], domains: ['microsoft.com', 'live.com', 'outlook.com', 'office.com', 'azure.com', 'microsoftonline.com'], typos: ['micros0ft', 'mircosoft', 'microsft', 'mlcrosoft', 'micosoft', 'microsfot'] },\n  { name: 'Apple', keywords: ['apple', 'icloud', 'itunes'], domains: ['apple.com', 'icloud.com', 'itunes.com', 'me.com'], typos: ['app1e', 'appIe', 'appleid-', 'appie', 'aple', 'appl', 'apple-'] },\n  { name: 'Amazon', keywords: ['amazon', 'aws', 'prime'], domains: ['amazon.com', 'amazon.in', 'amazon.co.uk', 'aws.com'], typos: ['amaz0n', 'amazom', 'arnazon', 'amazn', 'armazon', 'amazonn', 'amaz0n'] },\n  { name: 'Facebook', keywords: ['facebook', 'meta', 'instagram', 'whatsapp'], domains: ['facebook.com', 'fb.com', 'instagram.com', 'whatsapp.com', 'meta.com'], typos: ['faceb00k', 'facebok', 'facbook', 'fecebook', 'faceboook', 'faceebook'] },\n  { name: 'Netflix', keywords: ['netflix'], domains: ['netflix.com'], typos: ['netfIix', 'netf1ix', 'nettflix', 'netfiix', 'netflix-', 'netfl1x', 'netfliix'] },\n  { name: 'LinkedIn', keywords: ['linkedin'], domains: ['linkedin.com'], typos: ['linkedln', 'linkdin', 'linked1n', 'linkedln', 'llnkedin'] },\n  { name: 'Steam', keywords: ['steam', 'steampowered'], domains: ['steampowered.com', 'steamcommunity.com'], typos: ['steamcommunlty', 'stearnpowered', 'steam-', 'steampovered', 'steamcomunity'] },\n  { name: 'Discord', keywords: ['discord'], domains: ['discord.com', 'discord.gg', 'discordapp.com'], typos: ['disc0rd', 'dlscord', 'discorcd', 'discrod', 'disord'] },\n  { name: 'Twitter/X', keywords: ['twitter', 'x.com'], domains: ['twitter.com', 'x.com', 't.co'], typos: ['twltter', 'tw1tter', 'twtter', 'twiter'] },\n  { name: 'Bank of America', keywords: ['bankofamerica', 'bofa'], domains: ['bankofamerica.com'], typos: ['bankofamerlca', 'bankofamerica-', 'bank-of-america'] },\n  { name: 'Chase', keywords: ['chase'], domains: ['chase.com'], typos: ['chasebank-', 'chase-bank', 'chaseonline'] },\n  { name: 'Wells Fargo', keywords: ['wellsfargo'], domains: ['wellsfargo.com'], typos: ['wel1sfargo', 'wellsfarg0', 'wells-fargo'] },\n  { name: 'Dropbox', keywords: ['dropbox'], domains: ['dropbox.com'], typos: ['dr0pbox', 'dropb0x', 'dropboxs'] }\n];\n\nconst domainLower = domain.toLowerCase();\nconst titleLower = title.toLowerCase();\n\n// Typosquatting detection (25 points)\nfor (const brand of protectedBrands) {\n  for (const typo of brand.typos) {\n    if (domainLower.includes(typo)) {\n      score += 25;\n      flags.push({ type: 'critical', severity: 10, message: `Typosquatting detected: Impersonating ${brand.name}` });\n      details.typosquatting = { brand: brand.name, detected: typo };\n      break;\n    }\n  }\n  if (details.typosquatting) break;\n}\n\n// Brand impersonation without official domain (20 points)\nif (!details.typosquatting) {\n  for (const brand of protectedBrands) {\n    const brandInTitle = brand.keywords.some(k => titleLower.includes(k));\n    const brandInDomain = brand.keywords.some(k => domainLower.includes(k));\n    const isOfficial = brand.domains.some(d => domainLower === d || domainLower.endsWith('.' + d));\n    \n    if ((brandInTitle || brandInDomain) && !isOfficial) {\n      score += 20;\n      flags.push({ type: 'critical', severity: 9, message: `Possible ${brand.name} impersonation - not official domain` });\n      details.brandImpersonation = { brand: brand.name, officialDomains: brand.domains };\n      break;\n    }\n  }\n}\n\n// Check content script brand indicators\nif (brandIndicators && brandIndicators.length > 0 && !details.brandImpersonation) {\n  for (const indicator of brandIndicators) {\n    if (indicator.suspicious) {\n      score += 15;\n      flags.push({ type: 'warning', severity: 7, message: `Brand reference detected: ${indicator.brand}` });\n      details.contentBrandMatch = indicator.brand;\n      break;\n    }\n  }\n}\n\n// ==========================================\n// 3. URL PATTERN ANALYSIS (25 points)\n// ==========================================\nmaxScore += 25;\n\nconst criticalPatterns = [\n  { pattern: /verify[\\-_]?(your)?[\\-_]?account/i, name: 'Account verification' },\n  { pattern: /confirm[\\-_]?(your)?[\\-_]?identity/i, name: 'Identity confirmation' },\n  { pattern: /secure[\\-_]?login/i, name: 'Secure login redirect' },\n  { pattern: /account[\\-_]?verify/i, name: 'Account verification' },\n  { pattern: /update[\\-_]?(your)?[\\-_]?(billing|payment)/i, name: 'Billing update' },\n  { pattern: /suspended[\\-_]?account/i, name: 'Account suspension' },\n  { pattern: /limited[\\-_]?access/i, name: 'Limited access' },\n  { pattern: /unusual[\\-_]?activity/i, name: 'Unusual activity' },\n  { pattern: /signin[\\-_.]|[\\-_.]signin/i, name: 'Signin subdomain' },\n  { pattern: /login[\\-_.]|[\\-_.]login/i, name: 'Login subdomain' },\n  { pattern: /security[\\-_]?(alert|warning|notice)/i, name: 'Security alert' },\n  { pattern: /password[\\-_]?(reset|recover|change)/i, name: 'Password recovery' },\n  { pattern: /locked[\\-_]?account/i, name: 'Account locked' },\n  { pattern: /expir(e|ed|ing)/i, name: 'Expiration threat' }\n];\n\nconst urlLower = url.toLowerCase();\nlet patternMatches = 0;\nfor (const p of criticalPatterns) {\n  if (p.pattern.test(urlLower)) {\n    score += 10;\n    flags.push({ type: 'warning', severity: 7, message: `Suspicious URL pattern: ${p.name}` });\n    details.suspiciousUrlPattern = p.name;\n    patternMatches++;\n    if (patternMatches >= 2) break;\n  }\n}\n\n// URL encoding abuse (5 points)\nif (url.includes('%')) {\n  const encodedChars = (url.match(/%[0-9A-Fa-f]{2}/g) || []).length;\n  if (encodedChars > 5) {\n    score += 5;\n    flags.push({ type: 'info', severity: 5, message: `URL contains many encoded characters (${encodedChars})` });\n    details.encodedChars = encodedChars;\n  }\n}\n\n// @ symbol in URL - credential hiding trick (10 points)\nif (url.includes('@') && !url.startsWith('mailto:')) {\n  score += 10;\n  flags.push({ type: 'critical', severity: 9, message: 'URL contains @ symbol - possible credential trick' });\n  details.credentialTrick = true;\n}\n\n// ==========================================\n// 4. HTTPS & SECURITY (20 points)\n// ==========================================\nmaxScore += 20;\n\nif (!isHttps) {\n  if (hasLoginForm || hasPasswordField) {\n    score += 20;\n    flags.push({ type: 'critical', severity: 10, message: 'Login form on non-HTTPS page - DANGEROUS!' });\n    details.insecureLogin = true;\n  } else {\n    score += 5;\n    flags.push({ type: 'info', severity: 3, message: 'Site not using HTTPS' });\n    details.noHttps = true;\n  }\n}\n\n// ==========================================\n// 5. CONTENT ANALYSIS (20 points)\n// ==========================================\nmaxScore += 20;\n\n// Suspicious/urgent keywords\nif (suspiciousKeywords && suspiciousKeywords.length > 0) {\n  const keywordScore = Math.min(suspiciousKeywords.length * 4, 15);\n  score += keywordScore;\n  flags.push({ type: 'warning', severity: 7, message: `Urgent/threatening language: ${suspiciousKeywords.slice(0, 3).join(', ')}` });\n  details.suspiciousKeywords = suspiciousKeywords;\n  details.keywordCount = suspiciousKeywords.length;\n}\n\n// Short page with login form (5 points)\nif (hasLoginForm && pageLength < 2000) {\n  score += 5;\n  flags.push({ type: 'info', severity: 5, message: 'Short page with login form - possible fake login' });\n  details.shortPageWithLogin = true;\n}\n\n// ==========================================\n// 6. FORM ANALYSIS (15 points)\n// ==========================================\nmaxScore += 15;\n\nif (formActions && formActions.length > 0) {\n  for (const form of formActions) {\n    if (form.action && form.action !== 'same-page' && form.hasPassword) {\n      try {\n        const formUrl = new URL(form.action);\n        if (formUrl.hostname !== domain) {\n          score += 15;\n          flags.push({ type: 'critical', severity: 10, message: `Password form submits to different domain: ${formUrl.hostname}` });\n          details.crossDomainForm = { formDomain: formUrl.hostname, pageDomain: domain };\n          break;\n        }\n      } catch (e) {\n        // Invalid URL in form action\n      }\n    }\n  }\n}\n\n// ==========================================\n// CALCULATE FINAL RESULT\n// ==========================================\n\nconst normalizedScore = Math.min(Math.round((score / maxScore) * 100), 100);\n\n// Determine threat level\nlet isPhishing = normalizedScore >= 50;\nlet isSuspicious = normalizedScore >= 25 && normalizedScore < 50;\nlet threatLevel = 'safe';\nlet threatColor = '#4CAF50';\n\nif (normalizedScore >= 70) {\n  threatLevel = 'dangerous';\n  threatColor = '#D32F2F';\n} else if (normalizedScore >= 50) {\n  threatLevel = 'phishing';\n  threatColor = '#F44336';\n} else if (normalizedScore >= 25) {\n  threatLevel = 'suspicious';\n  threatColor = '#FF9800';\n}\n\n// Sort flags by severity\nflags.sort((a, b) => (b.severity || 0) - (a.severity || 0));\n\n// Get primary reason\nconst criticalFlags = flags.filter(f => f.type === 'critical');\nconst warningFlags = flags.filter(f => f.type === 'warning');\nconst primaryReason = criticalFlags.length > 0 \n  ? criticalFlags[0].message \n  : (warningFlags.length > 0 ? warningFlags[0].message : 'No significant issues detected');\n\n// Build comprehensive response\nreturn {\n  isPhishing: isPhishing,\n  isSuspicious: isSuspicious,\n  confidence: normalizedScore / 100,\n  score: normalizedScore,\n  threatLevel: threatLevel,\n  threatColor: threatColor,\n  reason: primaryReason,\n  summary: {\n    critical: criticalFlags.length,\n    warnings: warningFlags.length,\n    info: flags.filter(f => f.type === 'info').length,\n    totalFlags: flags.length\n  },\n  analysis: {\n    domain: domain,\n    url: url,\n    flags: flags,\n    details: details,\n    rawScore: score,\n    maxPossibleScore: maxScore,\n    scoreBreakdown: {\n      domainAnalysis: Math.min(score, 35),\n      brandProtection: Math.min(Math.max(0, score - 35), 40),\n      urlPatterns: Math.min(Math.max(0, score - 75), 25),\n      security: Math.min(Math.max(0, score - 100), 20),\n      content: Math.min(Math.max(0, score - 120), 20),\n      forms: Math.min(Math.max(0, score - 140), 15)\n    }\n  },\n  metadata: {\n    hasLoginForm: hasLoginForm,\n    hasPasswordField: hasPasswordField,\n    isHttps: isHttps,\n    pageLength: pageLength,\n    timestamp: new Date().toISOString(),\n    version: '2.5',\n    engine: 'Legitly Advanced Detection'\n  }\n};"
+      },
+      "id": "c3d4e5f6-7890-12cd-ef34-34567890abcd",
+      "name": "Advanced Phishing Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "phishing-condition",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 50,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d4e5f6g7-8901-23de-f456-4567890abcde",
+      "name": "Threat Level Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\n// Log phishing detection\nconsole.log('🚨 PHISHING DETECTED 🚨');\nconsole.log('Domain:', data.analysis.domain);\nconsole.log('Score:', data.score, '/', 100);\nconsole.log('Threat:', data.threatLevel.toUpperCase());\nconsole.log('Reason:', data.reason);\nconsole.log('Flags:', data.summary.critical, 'critical,', data.summary.warnings, 'warnings');\nconsole.log('Timestamp:', data.metadata.timestamp);\nconsole.log('---');\n\n// In production, you could:\n// - Store in database for threat intelligence\n// - Send alerts to security team\n// - Update blocklists\n// - Send to SIEM system\n\nreturn data;"
+      },
+      "id": "e5f6g7h8-9012-34ef-5678-567890abcdef",
+      "name": "Log Phishing Threat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\n// Log safe or suspicious sites\nif (data.isSuspicious) {\n  console.log('⚠️  SUSPICIOUS SITE');\n  console.log('Domain:', data.analysis.domain);\n  console.log('Score:', data.score, '/', 100);\n  console.log('Reason:', data.reason);\n} else {\n  console.log('✅ Safe Site:', data.analysis.domain, '- Score:', data.score);\n}\n\nreturn data;"
+      },
+      "id": "f6g7h8i9-0123-45fg-6789-67890abcdefg",
+      "name": "Log Safe/Suspicious",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, GET, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization"
+              },
+              {
+                "name": "X-Legitly-Version",
+                "value": "2.5"
+              }
+            ]
+          }
+        }
+      },
+      "id": "g7h8i9j0-1234-56gh-7890-7890abcdefgh",
+      "name": "Send Threat Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, GET, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization"
+              },
+              {
+                "name": "X-Legitly-Version",
+                "value": "2.5"
+              }
+            ]
+          }
+        }
+      },
+      "id": "h8i9j0k1-2345-67hi-8901-890abcdefghi",
+      "name": "Send Safe Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 500]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "report-false-positive",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "i9j0k1l2-3456-78ij-9012-90abcdefghij",
+      "name": "Report Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 700],
+      "webhookId": "legitly-report-fp"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nconst report = {\n  url: input.url || input.body?.url || '',\n  reportedAt: new Date().toISOString(),\n  type: input.type || 'false-positive',\n  userComment: input.comment || '',\n  reportId: 'RPT-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9)\n};\n\nconsole.log('📝 False Positive Report Received');\nconsole.log('URL:', report.url);\nconsole.log('Report ID:', report.reportId);\nconsole.log('Timestamp:', report.reportedAt);\n\n// In production:\n// - Store in database for ML training\n// - Flag for manual review\n// - Update whitelist if verified\n// - Adjust detection algorithms\n\nreturn {\n  success: true,\n  message: 'Thank you for your report! This helps improve our detection accuracy.',\n  reportId: report.reportId,\n  reportedUrl: report.url,\n  status: 'pending_review',\n  timestamp: report.reportedAt\n};"
+      },
+      "id": "j0k1l2m3-4567-89jk-0123-0abcdefghijk",
+      "name": "Handle False Positive Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 700]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "health",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "k1l2m3n4-5678-90kl-1234-abcdefghijkl",
+      "name": "Health Check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 900],
+      "webhookId": "legitly-health"
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  status: 'healthy',\n  service: 'Legitly Advanced Phishing Detection API',\n  version: '2.5',\n  uptime: process.uptime(),\n  timestamp: new Date().toISOString(),\n  endpoints: {\n    phishingCheck: 'POST /webhook/phishing-check',\n    reportFalsePositive: 'POST /webhook/report-false-positive',\n    health: 'GET /webhook/health'\n  },\n  features: [\n    'IP domain detection',\n    'Suspicious TLD analysis',\n    'Brand impersonation detection',\n    'Typosquatting detection',\n    'URL pattern analysis',\n    'HTTPS security check',\n    'Suspicious keyword detection',\n    'Cross-domain form detection',\n    'Multi-factor scoring'\n  ]\n};"
+      },
+      "id": "l2m3n4o5-6789-01lm-2345-bcdefghijklm",
+      "name": "Health Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 900]
+    }
+  ],
+  "connections": {
+    "Webhook - Phishing Check": {
+      "main": [
+        [
+          {
+            "node": "Extract Input Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Input Data": {
+      "main": [
+        [
+          {
+            "node": "Advanced Phishing Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Advanced Phishing Analysis": {
+      "main": [
+        [
+          {
+            "node": "Threat Level Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Threat Level Check": {
+      "main": [
+        [
+          {
+            "node": "Log Phishing Threat",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Safe/Suspicious",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Phishing Threat": {
+      "main": [
+        [
+          {
+            "node": "Send Threat Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Safe/Suspicious": {
+      "main": [
+        [
+          {
+            "node": "Send Safe Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report Webhook": {
+      "main": [
+        [
+          {
+            "node": "Handle False Positive Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Check": {
+      "main": [
+        [
+          {
+            "node": "Health Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "active": false
+}

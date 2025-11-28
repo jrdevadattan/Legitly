@@ -1,0 +1,358 @@
+{
+  "name": "Legitly Phishing Detection API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "phishing-check",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 400],
+      "webhookId": "legitly-phishing-check"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $input.first().json;\nconst url = inputData.body?.url || inputData.url || '';\n\nlet domain = '';\ntry {\n  const urlObj = new URL(url);\n  domain = urlObj.hostname;\n} catch (e) {\n  return [{ json: { url: url, domain: '', valid: false, error: 'Invalid URL' } }];\n}\n\nreturn [{ json: { url: url, domain: domain, valid: true } }];"
+      },
+      "id": "extract-url",
+      "name": "Extract URL & Domain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://safebrowsing.googleapis.com/v4/threatMatches:find",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "={{ $env.GOOGLE_SAFE_BROWSING_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"client\": {\n    \"clientId\": \"legitly-detector\",\n    \"clientVersion\": \"1.0.0\"\n  },\n  \"threatInfo\": {\n    \"threatTypes\": [\"MALWARE\", \"SOCIAL_ENGINEERING\", \"UNWANTED_SOFTWARE\", \"POTENTIALLY_HARMFUL_APPLICATION\"],\n    \"platformTypes\": [\"ANY_PLATFORM\"],\n    \"threatEntryTypes\": [\"URL\"],\n    \"threatEntries\": [\n      {\"url\": \"{{ $json.url }}\"}\n    ]\n  }\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "google-safe-browsing",
+      "name": "Google Safe Browsing Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.virustotal.com/api/v3/urls/{{ $json.url.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-apikey",
+              "value": "={{ $env.VIRUSTOTAL_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "virustotal-check",
+      "name": "VirusTotal URL Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.virustotal.com/api/v3/urls",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-apikey",
+              "value": "={{ $env.VIRUSTOTAL_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $('Extract URL & Domain').item.json.url }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "virustotal-submit",
+      "name": "Submit URL to VirusTotal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 600],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/customsearch/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "={{ $env.GOOGLE_SEARCH_API_KEY }}"
+            },
+            {
+              "name": "cx",
+              "value": "={{ $env.GOOGLE_SEARCH_ENGINE_ID }}"
+            },
+            {
+              "name": "q",
+              "value": "={{ $('Extract URL & Domain').item.json.domain }} phishing scam fraud"
+            },
+            {
+              "name": "num",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "google-search",
+      "name": "Google Search for Reports",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 800],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simple AI-like analysis based on heuristics\nconst url = $('Extract URL & Domain').item.json.url;\nconst domain = $('Extract URL & Domain').item.json.domain;\n\nlet isPhishing = false;\nlet confidence = 0;\nconst reasons = [];\nlet riskLevel = 'low';\n\n// Check for suspicious patterns\nconst suspiciousTLDs = ['.tk', '.ml', '.ga', '.cf', '.gq', '.xyz', '.top', '.club'];\nconst brandKeywords = ['paypal', 'amazon', 'microsoft', 'google', 'apple', 'bank', 'secure', 'login', 'account', 'verify', 'update'];\n\n// TLD check\nif (suspiciousTLDs.some(tld => domain.endsWith(tld))) {\n  reasons.push('Domain uses suspicious TLD commonly associated with phishing');\n  confidence += 30;\n  isPhishing = true;\n}\n\n// Brand impersonation check\nconst hasBrandKeyword = brandKeywords.some(kw => domain.toLowerCase().includes(kw));\nif (hasBrandKeyword && (domain.includes('-') || domain.match(/\\d{3,}/))) {\n  reasons.push('Possible brand impersonation detected (brand keyword with suspicious patterns)');\n  confidence += 40;\n  isPhishing = true;\n}\n\n// IP address check\nif (/^https?:\\/\\/\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/.test(url)) {\n  reasons.push('URL uses IP address instead of domain name');\n  confidence += 25;\n  isPhishing = true;\n}\n\n// Long subdomain check\nconst subdomains = domain.split('.');\nif (subdomains.length > 4) {\n  reasons.push('Excessive subdomains detected');\n  confidence += 20;\n  isPhishing = true;\n}\n\n// URL length check\nif (url.length > 100) {\n  reasons.push('Unusually long URL');\n  confidence += 15;\n}\n\n// @ symbol in URL\nif (url.includes('@')) {\n  reasons.push('URL contains @ symbol (potential obfuscation)');\n  confidence += 35;\n  isPhishing = true;\n}\n\n// Determine risk level\nif (confidence >= 70) riskLevel = 'critical';\nelse if (confidence >= 50) riskLevel = 'high';\nelse if (confidence >= 30) riskLevel = 'medium';\nelse riskLevel = 'low';\n\nif (reasons.length === 0) {\n  reasons.push('No obvious phishing indicators detected');\n}\n\nreturn [{\n  json: {\n    isPhishing: isPhishing,\n    confidence: Math.min(100, confidence),\n    reasons: reasons,\n    riskLevel: riskLevel,\n    analysis: isPhishing \n      ? `This URL shows ${reasons.length} suspicious indicator(s) commonly associated with phishing attempts.`\n      : 'URL structure appears normal with no obvious phishing indicators.',\n    checked: true\n  }\n}];"
+      },
+      "id": "heuristic-analysis",
+      "name": "Heuristic Phishing Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 1000],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-results",
+      "name": "Merge All Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all input data\nconst items = $input.all();\n\n// Initialize results\nlet googleSafeBrowsing = { threats: [], checked: false };\nlet virusTotal = { malicious: 0, suspicious: 0, checked: false };\nlet searchResults = { found: false, reports: [] };\nlet heuristicAnalysis = { isPhishing: false, confidence: 0, reasons: [], riskLevel: 'low' };\nlet originalUrl = '';\nlet domain = '';\n\n// Parse results from different sources\nfor (const item of items) {\n  const data = item.json;\n  \n  // Extract URL info\n  if (data.url && data.domain !== undefined) {\n    originalUrl = data.url;\n    domain = data.domain;\n  }\n  \n  // Google Safe Browsing results\n  if (data.matches) {\n    googleSafeBrowsing = {\n      threats: data.matches.map(m => m.threatType),\n      checked: true,\n      isThreat: data.matches.length > 0\n    };\n  } else if (data.matches === undefined && !data.error && Object.keys(data).length === 0) {\n    googleSafeBrowsing = { threats: [], checked: true, isThreat: false };\n  }\n  \n  // VirusTotal results\n  if (data.data?.attributes?.last_analysis_stats) {\n    const stats = data.data.attributes.last_analysis_stats;\n    virusTotal = {\n      malicious: stats.malicious || 0,\n      suspicious: stats.suspicious || 0,\n      harmless: stats.harmless || 0,\n      undetected: stats.undetected || 0,\n      checked: true\n    };\n  }\n  \n  // Google Search results\n  if (data.items && Array.isArray(data.items)) {\n    searchResults = {\n      found: data.items.length > 0,\n      reports: data.items.slice(0, 3).map(item => ({\n        title: item.title,\n        link: item.link,\n        snippet: item.snippet\n      })),\n      totalResults: data.searchInformation?.totalResults || 0\n    };\n  }\n  \n  // Heuristic Analysis\n  if (data.isPhishing !== undefined && data.confidence !== undefined && data.checked === true) {\n    heuristicAnalysis = {\n      isPhishing: data.isPhishing,\n      confidence: data.confidence,\n      reasons: data.reasons || [],\n      riskLevel: data.riskLevel || 'low',\n      analysis: data.analysis || '',\n      checked: true\n    };\n  }\n}\n\n// Calculate combined threat score\nlet threatScore = 0;\nconst allReasons = [];\n\n// Google Safe Browsing weight (40%)\nif (googleSafeBrowsing.isThreat) {\n  threatScore += 40;\n  allReasons.push(`Google Safe Browsing flagged: ${googleSafeBrowsing.threats.join(', ')}`);\n}\n\n// VirusTotal weight (35%)\nif (virusTotal.checked) {\n  const vtScore = Math.min(35, (virusTotal.malicious * 3.5) + (virusTotal.suspicious * 1.75));\n  threatScore += vtScore;\n  if (virusTotal.malicious > 0) {\n    allReasons.push(`${virusTotal.malicious} security engines detected as malicious`);\n  }\n  if (virusTotal.suspicious > 0) {\n    allReasons.push(`${virusTotal.suspicious} security engines marked as suspicious`);\n  }\n}\n\n// Heuristic Analysis weight (15%)\nif (heuristicAnalysis.checked && heuristicAnalysis.isPhishing) {\n  threatScore += Math.min(15, heuristicAnalysis.confidence * 0.15);\n  allReasons.push(...heuristicAnalysis.reasons);\n}\n\n// Search results weight (10%)\nif (searchResults.found && parseInt(searchResults.totalResults) > 100) {\n  threatScore += 10;\n  allReasons.push('Multiple phishing/scam reports found online');\n}\n\n// Determine final verdict\nconst isPhishing = threatScore >= 30;\nlet riskLevel = 'low';\nif (threatScore >= 70) riskLevel = 'critical';\nelse if (threatScore >= 50) riskLevel = 'high';\nelse if (threatScore >= 30) riskLevel = 'medium';\n\nreturn [{\n  json: {\n    url: originalUrl,\n    domain: domain,\n    isPhishing: isPhishing,\n    threatScore: Math.min(100, Math.round(threatScore)),\n    riskLevel: riskLevel,\n    confidence: Math.min(100, Math.round(threatScore)),\n    reasons: [...new Set(allReasons)],\n    details: {\n      googleSafeBrowsing: googleSafeBrowsing,\n      virusTotal: virusTotal,\n      searchResults: searchResults,\n      heuristicAnalysis: heuristicAnalysis\n    },\n    recommendation: isPhishing \n      ? '⚠️ WARNING: This site has been identified as potentially dangerous. Do not enter any personal information.'\n      : '✓ This site appears to be safe based on available data, but always exercise caution.',\n    timestamp: new Date().toISOString(),\n    checkedBy: 'Legitly Phishing Detection v1.0'\n  }\n}];"
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate & Score Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 500]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract URL & Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract URL & Domain": {
+      "main": [
+        [
+          {
+            "node": "Google Safe Browsing Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "VirusTotal URL Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Submit URL to VirusTotal",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Google Search for Reports",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Heuristic Phishing Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Safe Browsing Check": {
+      "main": [
+        [
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "VirusTotal URL Check": {
+      "main": [
+        [
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Submit URL to VirusTotal": {
+      "main": [
+        [
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Google Search for Reports": {
+      "main": [
+        [
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Heuristic Phishing Analysis": {
+      "main": [
+        [
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Merge All Results": {
+      "main": [
+        [
+          {
+            "node": "Aggregate & Score Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate & Score Results": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-14T00:00:00.000Z",
+  "versionId": "legitly-v1"
+}
