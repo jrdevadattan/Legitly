@@ -1,138 +1,126 @@
-# 🛡️ Legitly Phishing Detector (Lite Extension)
+# Legitly
 
-Lightweight Chrome Extension + n8n workflow for real‑time phishing verdicts. The current extension version (Manifest V3) posts each visited page URL to a cloud webhook and shows the returned verdict, risk score, and summary.
+Legitly Phishing Detector (Lite Extension)
 
-## 🚀 Quick Start
+This extension posts each visited page URL to a webhook and shows the returned verdict, risk score, and summary.
 
-### Option A: Using n8n Cloud (recommended)
+## Quick Start
+
+### Option A: Using n8n Cloud
 
 1. Ensure your workflow is activated at:
-        `https://rethu.app.n8n.cloud/webhook/phish-check`
-2. No local n8n start required.
+`https://rethu.app.n8n.cloud/webhook/phish-check`
 
 ### Option B: Local n8n
-
-If you want to run locally instead of cloud:
 
 ```bash
 n8n start
 ```
 
-Adjust the webhook URL in `background.js` and (if needed) workflow to match your local endpoint (e.g. `http://localhost:5678/webhook/phish-check`).
+Adjust the webhook URL in `background.js` to match your local endpoint (for example `http://localhost:5678/webhook/phish-check`).
 
 ### Install the Chrome Extension
 
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable **Developer mode** (top right toggle)
-3. Click **Load unpacked**
-4. Select the `chrome-extension` folder
-5. The Legitly extension should appear in your toolbar
+1. Open Chrome and go to `chrome://extensions/`.
+2. Enable Developer mode.
+3. Click Load unpacked.
+4. Select the `chrome-extension` folder.
 
-### (Optional) Icons
-
-Current manifest omits custom icons for simplicity. You can add an `icons/` folder and update `manifest.json` later.
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 Legitly/
 ├── chrome-extension/
-│   ├── manifest.json      # MV3 manifest (no content script)
-│   ├── background.js      # Sends URL -> n8n webhook, caches by tabId
-│   ├── popup.html         # Minimal verdict / risk / summary UI
-│   ├── popup.js           # Popup logic (tabId lookup + refresh)
-│   └── (optional icons/)
+│   ├── manifest.json
+│   ├── background.js
+│   ├── popup.html
+│   ├── popup.js
+│   └── icons/
 │
 ├── n8n-workflow/
-│   └── legitly-phishing-workflow.json  # n8n workflow
+│   └── legitly-phishing-workflow.json
 │
 └── README.md
 ```
 
-## 🔧 How It Works
-
-### Runtime Flow (Lite Version)
+## How It Works
 
 ```
-Navigation complete (top frame)
-   → background.js posts { url } to webhook
-           → n8n workflow analyzes & returns JSON
-                   → stored under chrome.storage.local[tabId]
-                           → popup.js reads entry when opened
-                                   → displays verdict (color), risk score, summary
+Navigation complete
+→ background.js posts { url } to webhook
+→ n8n workflow returns JSON
+→ stored under chrome.storage.local[tabId]
+→ popup.js reads entry when opened
+→ displays verdict, risk score, summary
 ```
 
-## 🎯 Detection Features
+## Detection Features
 
 | Feature | Description |
 |---------|-------------|
-| **Domain Analysis** | Checks for IP addresses, suspicious TLDs, excessive subdomains |
-| **Brand Impersonation** | Detects fake PayPal, Google, Microsoft, Amazon pages |
-| **Typosquatting** | Catches misspelled brand domains (g00gle, paypa1) |
-| **HTTPS Check** | Warns about login forms on non-HTTPS pages |
-| **Keyword Detection** | Finds urgent/threatening language |
-| **Form Analysis** | Checks if forms submit to suspicious domains |
+| Domain Analysis | Checks for IP addresses, suspicious TLDs, excessive subdomains |
+| Brand Impersonation | Detects fake PayPal, Google, Microsoft, Amazon pages |
+| Typosquatting | Catches misspelled brand domains (g00gle, paypa1) |
+| HTTPS Check | Warns about login forms on non-HTTPS pages |
+| Keyword Detection | Finds urgent/threatening language |
+| Form Analysis | Checks if forms submit to suspicious domains |
+# Legitly
 
-## 🔗 Webhook Contract (Current Expectation)
+Legitly is a Chrome extension that estimates how trustworthy a website appears using two independent sources: Google Safe Browsing and VirusTotal. It shows an overall score and two concentric rings representing each source. The extension checks automatically when you visit pages and lets you recheck on demand.
 
-Request (background.js):
-```json
-{ "url": "https://example.com/path" }
+## Repository layout
+
+```
+README.md
+test.json
+main-extension/
+        background.js
+        manifest.json
+        popup.html
+        popup.js
+        README.md
+        assets/
+sample-ext/
+        background.js
+        manifest.json
+        popup.html
+        popup.js
+test/
+        index.js
+        package.json
 ```
 
-Expected Response (examples):
-```json
-{
-        "parsedOutput": {
-                "verdict": "SAFE",
-                "risk_score": 12,
-                "summary": "No phishing indicators detected."
-        }
-}
-```
-or (without wrapper):
-```json
-{
-        "verdict": "MALICIOUS",
-        "risk_score": 87,
-        "summary": "Multiple brand impersonation signals detected."
-}
-```
+## Install the extension
 
-The popup falls back to alternative fields (`final_verdict`, `final_trust_score`, `total_score`, `description`) if primary keys are absent.
+1. Open Chrome and go to `chrome://extensions/`.
+2. Enable Developer mode.
+3. Click Load unpacked and select `main-extension/`.
+4. Pin the extension icon if desired.
 
-## ⚙️ Configuration
+## What it does
 
-### Change Webhook URL
+- Sends the current page URL to an n8n webhook for analysis
+- Computes an overall trust score from 0 to 100
+- Displays separate Google Safe Browsing and VirusTotal ring scores
+- Rechecks on navigation and supports manual recheck
+- Provides an Auto toggle to enable or disable automatic checks
+ - Highlights pages likely to be fake, suspicious, or misinformation based on detected signals
 
-Edit `background.js` constant `N8N_WEBHOOK_URL`. Popup reads cached data only—no direct network calls.
+## Scoring summary
 
-## 🧪 Testing
+- Start at 100 points
+- Google Safe Browsing match subtracts 50 points; Google ring is 0 (otherwise 100)
+- VirusTotal ring is `(harmless + undetected) / (malicious + suspicious + harmless + undetected) * 100`
+- Up to 40 points are subtracted from the overall score based on `malicious + suspicious` ratio
 
-1. Load extension (Developer mode → Load unpacked → `chrome-extension/`).
-2. Navigate to several sites; open the popup to view results.
-3. Press Recheck to force a fresh POST (overrides cache for that tab).
-4. Toggle JSON to inspect raw returned object.
+For detailed behavior, see `main-extension/README.md`.
 
-## 🚨 Potential Indicators (Workflow-Dependent)
+## Development notes
 
-Your workflow can populate verdict logic using:
-- Domain risk (TLD, length, entropy)
-- Brand impersonation / typosquatting
-- Form & credential capture patterns
-- Mixed content / HTTPS issues
-- Language urgency / scam terms
+- MV3 background service worker in `main-extension/background.js`
+- Popup UI in `main-extension/popup.html` and logic in `main-extension/popup.js`
+- Icons and images in `main-extension/assets/`
 
-## 📝 License
+## License
 
-MIT License - Feel free to use and modify!
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Add new detection rules in the n8n workflow
-3. Submit a pull request
-
----
-
-**Built with ❤️ using n8n + Chrome Extensions API**
+MIT

@@ -1,9 +1,5 @@
-// Phishing Detector - Background Service Worker
-// Listens for navigation events and sends URL to n8n webhook
-// Stores response keyed by tabId in chrome.storage.local
-
 const N8N_WEBHOOK_URL = 'https://rethu.app.n8n.cloud/webhook/phish-check';
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 async function postToWebhook(url) {
   const rawBody = `{\r\n  \"url\": \"${url}\"\r\n}`;
@@ -19,7 +15,6 @@ async function postToWebhook(url) {
 }
 
 function calculateScores(rawResponse) {
-  // Response format: [safeBrowsing, virusTotal, metadata]
   let totalScore = 100;
   let gsbScore = 100;
   let vtScore = 100;
@@ -27,7 +22,6 @@ function calculateScores(rawResponse) {
   const safeBrowsing = Array.isArray(rawResponse) ? (rawResponse[0] || {}) : {};
   const virusTotal = Array.isArray(rawResponse) ? (rawResponse[1] || {}) : {};
 
-  // Google Safe Browsing: empty {} means safe; any matches => unsafe
   if (safeBrowsing && safeBrowsing.matches && safeBrowsing.matches.length > 0) {
     totalScore -= 50;
     gsbScore = 0;
@@ -35,7 +29,6 @@ function calculateScores(rawResponse) {
     gsbScore = 100;
   }
 
-  // VirusTotal stats scoring using provided structure
   const stats = virusTotal?.data?.attributes?.stats || {};
   const malicious = stats.malicious || 0;
   const suspicious = stats.suspicious || 0;
@@ -44,9 +37,7 @@ function calculateScores(rawResponse) {
   const total = malicious + suspicious + harmless + undetected;
 
   if (total > 0) {
-    // vtScore = percentage of non-threatening findings
     vtScore = Math.round(((harmless + undetected) / total) * 100);
-    // Total score penalty up to 40 based on threat ratio
     const threatRatio = (malicious + suspicious) / total;
     totalScore -= Math.min(40, Math.round(threatRatio * 100) * 0.4);
   }
@@ -105,7 +96,6 @@ async function handleCheck(tabId, url) {
   }
 }
 
-// Badge updater based on verdict
 function updateBadge(tabId, scoresOrParsed) {
   let status = scoresOrParsed?.status;
   if (!status) {
@@ -124,26 +114,22 @@ function updateBadge(tabId, scoresOrParsed) {
   chrome.action.setBadgeBackgroundColor({ tabId, color });
 }
 
-// Listen for completed top-frame navigations
 chrome.webNavigation.onCompleted.addListener(({ tabId, frameId, url }) => {
-  if (frameId !== 0) return; // only top frame
+  if (frameId !== 0) return;
   if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://')) return;
   handleCheck(tabId, url);
 });
 
-// React to URL changes (including SPA navigations)
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url && !changeInfo.url.startsWith('chrome://') && !changeInfo.url.startsWith('chrome-extension://')) {
     handleCheck(tabId, changeInfo.url);
   }
 });
 
-// Cleanup on tab removal
 chrome.tabs.onRemoved.addListener((tabId) => {
   chrome.storage.local.remove(String(tabId));
 });
 
-// Expose a message API for manual refresh from popup
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'refreshCurrentTab') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -163,4 +149,4 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-console.log('Phishing Detector background service worker initialized');
+console.log('Background service worker initialized');

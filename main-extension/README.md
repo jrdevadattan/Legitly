@@ -9,6 +9,7 @@ Legitly helps you quickly understand how trustworthy a website appears, based on
 - Checks pages automatically when you visit or navigate within them
 - Lets you turn automatic checks on or off
 - Allows a manual “Recheck Page” when needed
+ - Highlights pages likely to be fake, suspicious, or misinformation based on detected signals
 
 ## How the score is calculated
 
