@@ -8,8 +8,7 @@ This extension posts each visited page URL to a webhook and shows the returned v
 
 ### Option A: Using n8n Cloud
 
-1. Ensure your workflow is activated at:
-`https://rethu.app.n8n.cloud/webhook/phish-check`
+1. Ensure your workflow is activated.
 
 ### Option B: Local n8n
 
