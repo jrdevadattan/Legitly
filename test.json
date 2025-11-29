@@ -1,132 +1,360 @@
 {
-  "name": "Phishing Detection for Chrome Extension",
+  "name": "Phishing Detection Agent (Gemini Powered)",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "phish-check",
-        "responseMode": "onReceived"
+        "responseMode": "onReceived",
+        "options": {}
       },
-      "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [240, 200]
+      "typeVersion": 2,
+      "position": [
+        -380,
+        0
+      ],
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger"
     },
     {
       "parameters": {
-        "values": {
-          "string": [
-            { "name": "url", "value": "={{ $json.url || $json.inputUrl }}" },
-            { "name": "hostname", "value": "={{ $helper.getHostname($json.url || $json.inputUrl) }}" }
+        "fields": {
+          "values": [
+            {
+              "name": "url",
+              "stringValue": "={{ $json.url || $json.inputUrl }}"
+            },
+            {
+              "name": "hostname",
+              "stringValue": "={{ new URL($json.url || $json.inputUrl).hostname }}"
+            }
           ]
         }
       },
-      "name": "Set URL & Hostname",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 1,
-      "position": [460, 200]
+      "typeVersion": 3.4,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "normalize-data",
+      "name": "Normalize URL"
     },
     {
       "parameters": {
-        "requestMethod": "POST",
-        "url": "=https://safebrowsing.googleapis.com/v4/threatMatches:find?key={{ $env.GOOGLE_SAFE_BROWSING_API_KEY }}",
-        "jsonParameters": true,
-        "bodyParametersJson": "={ \"client\": { \"clientId\": \"n8n-phish-check\", \"clientVersion\": \"1.0\" }, \"threatInfo\": { \"threatTypes\": [\"MALWARE\",\"SOCIAL_ENGINEERING\",\"UNWANTED_SOFTWARE\"], \"platformTypes\": [\"ANY_PLATFORM\"], \"threatEntryTypes\": [\"URL\"], \"threatEntries\": [{ \"url\": $json.url }] } }"
-      },
-      "name": "Google Safe Browsing",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
-      "position": [700, 40]
-    },
-    {
-      "parameters": {
-        "requestMethod": "GET",
-        "url": "https://check.phishtank.com/checkurl/",
-        "queryParametersUi": {
-          "parameter": [
-            { "name": "format", "value": "json" },
-            { "name": "url", "value": "={{ $json.url }}" }
+        "method": "POST",
+        "url": "https://safebrowsing.googleapis.com/v4/threatMatches:find",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_GOOGLE_SAFE_BROWSING_KEY"
+            }
           ]
-        }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ {\n  \"client\": {\"clientId\":\"n8n-phish-check\",\"clientVersion\":\"1.0\"},\n  \"threatInfo\": {\n    \"threatTypes\":[\"MALWARE\",\"SOCIAL_ENGINEERING\",\"UNWANTED_SOFTWARE\"],\n    \"platformTypes\":[\"ANY_PLATFORM\"],\n    \"threatEntryTypes\":[\"URL\"],\n    \"threatEntries\":[{\"url\": $json.url }]\n  }\n} }}",
+        "options": {}
       },
-      "name": "PhishTank Lookup",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
-      "position": [700, 160]
+      "typeVersion": 4.1,
+      "position": [
+        120,
+        -240
+      ],
+      "id": "google-sb",
+      "name": "Google Safe Browsing"
     },
     {
       "parameters": {
-        "requestMethod": "GET",
-        "url": "=https://www.virustotal.com/api/v3/urls/{{ Buffer.from($json.url).toString('base64').replace(/=+$/, '') }}",
-        "options": {},
-        "responseFormat": "json"
+        "url": "https://check.phishtank.com/checkurl/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "url",
+              "value": "={{ $json.url }}"
+            }
+          ]
+        },
+        "options": {}
       },
-      "name": "VirusTotal URL Check",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
-      "position": [700, 280],
+      "typeVersion": 4.1,
+      "position": [
+        120,
+        -80
+      ],
+      "id": "phishtank",
+      "name": "PhishTank Lookup"
+    },
+    {
+      "parameters": {
+        "url": "=https://www.virustotal.com/api/v3/urls/{{ Buffer.from($json.url).toString('base64').replace(/=+$/, '') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        120,
+        80
+      ],
+      "id": "virustotal",
+      "name": "VirusTotal",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "",
+          "id": "YOUR_VIRUSTOTAL_CRED_ID",
           "name": "VirusTotal Header"
         }
       }
     },
     {
       "parameters": {
-        "requestMethod": "GET",
-        "url": "=https://api.whois.example/whois/{{ $json.hostname }}",
-        "options": {},
-        "responseFormat": "json"
+        "url": "=https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey=YOUR_WHOIS_KEY&domainName={{ $json.hostname }}&outputFormat=JSON",
+        "options": {}
       },
-      "name": "WHOIS / Domain Info (placeholder)",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
-      "position": [700, 400]
+      "typeVersion": 4.1,
+      "position": [
+        120,
+        240
+      ],
+      "id": "whois-lookup",
+      "name": "WHOIS Lookup"
     },
     {
       "parameters": {
-        "requestMethod": "GET",
         "url": "={{ 'https://' + $json.hostname }}",
         "responseFormat": "string",
         "options": {
           "followRedirect": true,
-          "allowUnauthorizedCerts": false
+          "allowUnauthorizedCerts": true
         }
       },
-      "name": "Fetch Page HTML",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 1,
-      "position": [700, 520]
+      "typeVersion": 4.1,
+      "position": [
+        120,
+        400
+      ],
+      "id": "fetch-html",
+      "name": "Fetch Page HTML"
     },
     {
       "parameters": {
-        "functionCode": "// Consolidate signals from previous nodes and compute a phish_score (0-100)\nconst sb = $items(\"Google Safe Browsing\")[0]?.json || {};\nconst pt = $items(\"PhishTank Lookup\")[0]?.json || {};\nconst vt = $items(\"VirusTotal URL Check\")[0]?.json || {};\nconst whois = $items(\"WHOIS / Domain Info (placeholder)\")[0]?.json || {};\nconst html = $items(\"Fetch Page HTML\")[0]?.json || '';\nconst inputUrl = $json.url || $json.inputUrl || '';\n\nlet score = 0;\nconst reasons = [];\n\n// High confidence lists\nif (sb && Object.keys(sb).length > 0) {\n  score = 100; reasons.push('Listed on Google Safe Browsing');\n}\n// PhishTank check (some responses use 'valid' or 'in_database')\nif (pt && (pt.valid || pt.in_database || pt.exists || pt.phish)) {\n  score = Math.max(score, 95); reasons.push('Found in PhishTank');\n}\n// VirusTotal: look at last_analysis_stats if present\ntry {\n  const stats = vt?.data?.attributes?.last_analysis_stats;\n  if (stats) {\n    // treat malicious >0 as strong signal\n    if (stats.malicious && stats.malicious > 0) { score = Math.max(score, 95); reasons.push('VirusTotal: malicious engines flagged'); }\n    else if (stats.suspicious && stats.suspicious > 0) { score += 40; reasons.push('VirusTotal: suspicious engines flagged'); }\n  }\n} catch(e){}\n\n// WHOIS: domain age heuristic\ntry {\n  const created = whois?.createdDate || whois?.creation_date || whois?.created;\n  if (created) {\n    const ageDays = Math.floor((Date.now() - new Date(created)) / (1000*60*60*24));\n    if (ageDays < 30) { score += 25; reasons.push('Domain age < 30 days'); }\n    else if (ageDays < 180) { score += 10; reasons.push('Domain age < 180 days'); }\n  }\n} catch(e){}\n\n// TLS heuristic\nif (!inputUrl.toLowerCase().startsWith('https://')) { score += 30; reasons.push('No HTTPS'); }\n\n// HTML heuristics\ntry {\n  const htmlLower = (html || '').toLowerCase();\n  // forms posting to external domains\n  if (/<form[\\s\\S]*action=\\\"https?:\\/\\//.test(htmlLower) && !htmlLower.includes($json.hostname)) { score += 20; reasons.push('Form posts to external domain'); }\n  // credential/urgent keywords\n  if (/(enter your password|verify your account|update your payment|confirm your identity)/.test(htmlLower)) { score += 15; reasons.push('Urgent credential request language'); }\n} catch(e){}\n\n// clamp\nif (score > 100) score = 100;\nconst verdict = score >= 70 ? 'block' : score >= 40 ? 'warn' : 'safe';\n\nreturn [{ json: { url: inputUrl, phish_score: score, verdict, reasons, vt_raw: vt } }];"
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Helper to safely get data\nconst getData = (nodeName) => {\n  try {\n    return $(nodeName).first().json;\n  } catch (e) {\n    return { error: \"Check failed or no data\", details: e.message };\n  }\n};\n\nconst url = $('Normalize URL').first().json.url;\n\n// Aggregate all data\nreturn [\n  {\n    json: {\n      target_url: url,\n      safebrowsing: getData('Google Safe Browsing'),\n      phishtank: getData('PhishTank Lookup'),\n      virustotal: getData('VirusTotal'),\n      whois: getData('WHOIS Lookup'),\n      // Truncate HTML for Gemini Token Limits\n      html_snippet: (getData('Fetch Page HTML') || \"\").toString().slice(0, 3000)\n    }\n  }\n];"
       },
-      "name": "Scoring & Verdict",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
-      "position": [940, 320]
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        80
+      ],
+      "id": "aggregator",
+      "name": "Aggregator"
     },
     {
       "parameters": {
-        "statusCode": 200,
-        "body": "={{ $json }}"
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"system_instruction\": {\n    \"parts\": {\n      \"text\": \"You are a cybersecurity expert. Analyze the provided URL scan data. You must return ONLY a raw JSON object (no markdown formatting). The JSON must strictly follow this schema: { \\\"final_verdict\\\": \\\"SAFE\\\" | \\\"SUSPICIOUS\\\" | \\\"MALICIOUS\\\", \\\"final_score\\\": number (0-100, where 100 is safe), \\\"final_summary\\\": \\\"string\\\", \\\"sources\\\": { \\\"virustotal\\\": { \\\"score\\\": number, \\\"ai_analysis\\\": \\\"string\\\" }, \\\"safebrowsing\\\": { \\\"score\\\": number, \\\"ai_analysis\\\": \\\"string\\\" }, \\\"phishtank\\\": { \\\"score\\\": number, \\\"ai_analysis\\\": \\\"string\\\" }, \\\"whois\\\": { \\\"score\\\": number, \\\"ai_analysis\\\": \\\"string\\\" }, \\\"html_analysis\\\": { \\\"score\\\": number, \\\"ai_analysis\\\": \\\"string\\\" } } }\"\n    }\n  },\n  \"contents\": [\n    {\n      \"role\": \"user\",\n      \"parts\": [\n        {\n          \"text\": \"Analyze this security data: {{ JSON.stringify($json) }}\"\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"response_mime_type\": \"application/json\"\n  }\n}",
+        "options": {}
       },
-      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        680,
+        80
+      ],
+      "id": "gemini-analysis",
+      "name": "AI Model Check (Gemini)",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "YOUR_GEMINI_CRED_ID",
+          "name": "Gemini Header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "parsedOutput",
+              "stringValue": "={{ JSON.parse($json.candidates[0].content.parts[0].text) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        900,
+        80
+      ],
+      "id": "parse-gemini",
+      "name": "Parse Gemini JSON"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.parsedOutput }}",
+        "options": {}
+      },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1180, 320]
+      "position": [
+        1120,
+        80
+      ],
+      "id": "respond-webhook",
+      "name": "Respond to Webhook"
     }
   ],
   "connections": {
-    "Webhook Trigger": { "main": [ [ { "node": "Set URL & Hostname", "type": "main", "index": 0 } ] ] },
-    "Set URL & Hostname": { "main": [ [ { "node": "Google Safe Browsing", "type": "main", "index": 0 }, { "node": "PhishTank Lookup", "type": "main", "index": 0 }, { "node": "VirusTotal URL Check", "type": "main", "index": 0 }, { "node": "WHOIS / Domain Info (placeholder)", "type": "main", "index": 0 }, { "node": "Fetch Page HTML", "type": "main", "index": 0 } ] ] },
-    "Google Safe Browsing": { "main": [ [ { "node": "Scoring & Verdict", "type": "main", "index": 0 } ] ] },
-    "PhishTank Lookup": { "main": [ [ { "node": "Scoring & Verdict", "type": "main", "index": 0 } ] ] },
-    "VirusTotal URL Check": { "main": [ [ { "node": "Scoring & Verdict", "type": "main", "index": 0 } ] ] },
-    "WHOIS / Domain Info (placeholder)": { "main": [ [ { "node": "Scoring & Verdict", "type": "main", "index": 0 } ] ] },
-    "Fetch Page HTML": { "main": [ [ { "node": "Scoring & Verdict", "type": "main", "index": 0 } ] ] },
-    "Scoring & Verdict": { "main": [ [ { "node": "Respond to Webhook", "type": "main", "index": 0 } ] ] }
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize URL": {
+      "main": [
+        [
+          {
+            "node": "Google Safe Browsing",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "PhishTank Lookup",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "VirusTotal",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "WHOIS Lookup",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Page HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Safe Browsing": {
+      "main": [
+        [
+          {
+            "node": "Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PhishTank Lookup": {
+      "main": [
+        [
+          {
+            "node": "Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal": {
+      "main": [
+        [
+          {
+            "node": "Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WHOIS Lookup": {
+      "main": [
+        [
+          {
+            "node": "Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Page HTML": {
+      "main": [
+        [
+          {
+            "node": "Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregator": {
+      "main": [
+        [
+          {
+            "node": "AI Model Check (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Model Check (Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Parse Gemini JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gemini JSON": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   }
 }

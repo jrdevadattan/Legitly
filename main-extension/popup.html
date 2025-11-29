@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Legitly - Trust Score</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 320px;
+      padding: 0;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+    
+    .container {
+      background: #f5f5f5;
+      border-radius: 0;
+      padding: 0;
+      box-shadow: none;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      background: white;
+      border-radius: 24px;
+      margin: 10px 10px 16px 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .menu-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+    
+    .menu-icon span {
+      width: 18px;
+      height: 2px;
+      background: #333;
+      border-radius: 2px;
+    }
+    
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: #333;
+      letter-spacing: -0.5px;
+    }
+    
+    .user-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    
+    .user-icon::before {
+      content: '';
+      width: 12px;
+      height: 12px;
+      border: 2px solid white;
+      border-radius: 50%;
+    }
+    
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin: 12px auto 16px auto;
+      background: #e8e8e8;
+      padding: 8px 18px;
+      border-radius: 28px;
+      width: fit-content;
+    }
+    
+    .toggle-label {
+      font-size: 14px;
+      color: #333;
+      font-weight: 600;
+    }
+    
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 26px;
+      background: #6c63ff;
+      border-radius: 26px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    
+    .toggle-switch.active {
+      background: #6c63ff;
+    }
+    
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: white;
+      top: 3px;
+      left: 3px;
+      transition: left 0.3s;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    
+    .toggle-switch.active::after {
+      left: 25px;
+    }
+    
+    .score-container {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin: 0 0 16px 0;
+      padding: 0 12px;
+    }
+    
+    .score-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #333;
+      letter-spacing: -0.5px;
+    }
+    
+    .circle-wrapper {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      flex-shrink: 0;
+    }
+    
+    .circle-bg {
+      fill: none;
+      stroke: #e8e8e8;
+      stroke-width: 14;
+    }
+    
+    .circle-segment {
+      fill: none;
+      stroke-width: 14;
+      stroke-linecap: round;
+      transform: rotate(-90deg);
+      transform-origin: center;
+      transition: stroke-dasharray 0.6s ease-out;
+    }
+    
+    .score-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    
+    .score-value {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+      color: #333;
+    }
+    
+    .score-label {
+      font-size: 10px;
+      color: #999;
+      margin-top: 2px;
+      font-weight: 400;
+    }
+    
+    .status-badge {
+      display: none;
+    }
+    
+    .stats-panel {
+      background: white;
+      border-radius: 16px;
+      padding: 14px;
+      margin: 0 10px 16px 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .stats-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 12px;
+    }
+    
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .stat-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    
+    .stat-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .stat-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #f0efff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .stat-icon img {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+    }
+    
+    .stat-label {
+      font-size: 13px;
+      color: #333;
+      font-weight: 500;
+    }
+    
+    .stat-value {
+      font-size: 13px;
+      font-weight: 500;
+      color: #666;
+      max-width: 150px;
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .https-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    
+    .https-secure {
+      background: #E8F5E9;
+      color: #4CAF50;
+    }
+    
+    .https-insecure {
+      background: #FFEBEE;
+      color: #F44336;
+    }
+    
+    .buttons-container {
+      display: flex;
+      gap: 10px;
+      padding: 0 10px 12px 10px;
+    }
+
+    /* Disabled tint when Auto is OFF */
+    #contentState.disabled {
+      position: relative;
+    }
+    #contentState.disabled::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.6);
+      border-radius: 12px;
+      pointer-events: none;
+    }
+    #contentState.disabled .stats-panel,
+    #contentState.disabled .buttons-container,
+    #contentState.disabled .score-container {
+      filter: grayscale(10%);
+      opacity: 0.6;
+      pointer-events: none;
+    }
+    
+    .btn {
+      flex: 1;
+      padding: 10px 14px;
+      border: none;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .btn-primary {
+      background: #6c63ff;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(108, 99, 255, 0.3);
+    }
+    
+    .btn-secondary {
+      background: #6c63ff;
+      color: white;
+    }
+    
+    .btn-secondary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(108, 99, 255, 0.3);
+    }
+    
+    .threats-container {
+      margin-top: 20px;
+      padding: 16px;
+      background: #fff9e6;
+      border-radius: 8px;
+      border-left: 4px solid #ff9800;
+    }
+    
+    .threats-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #ff6f00;
+      margin-bottom: 8px;
+    }
+    
+    .threat-item {
+      font-size: 12px;
+      padding: 6px 0;
+      color: #666;
+      border-bottom: 1px solid #ffe0b2;
+    }
+    
+    .threat-item:last-child {
+      border-bottom: none;
+    }
+    
+    .threat-source {
+      font-weight: 600;
+      color: #ff6f00;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px 0;
+      color: #666;
+    }
+    
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 12px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="menu-icon" aria-label="menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="logo">Legitly</div>
+      <div class="user-icon"></div>
+    </div>
+    
+    <div id="loadingState" class="loading">
+      <div class="spinner"></div>
+      <div>Checking website...</div>
+    </div>
+    
+    <div id="contentState" class="hidden">
+      <div class="score-container">
+        <div class="circle-wrapper" id="ringWrapper">
+          <svg width="120" height="120">
+            <!-- Outer ring (VirusTotal) -->
+            <circle class="circle-bg" cx="60" cy="60" r="50"></circle>
+            <circle id="vtProgress" class="circle-segment" cx="60" cy="60" r="50" stroke="#6c63ff"></circle>
+            
+            <!-- Inner ring (Google Safe Browsing) -->
+            <circle class="circle-bg" cx="60" cy="60" r="34"></circle>
+            <circle id="gsbProgress" class="circle-segment" cx="60" cy="60" r="34" stroke="#4ade80"></circle>
+          </svg>
+          <div class="score-text">
+            <div class="score-value" id="scoreValue">--</div>
+            <div class="score-label">score</div>
+          </div>
+          <div id="ringTooltip" style="position:absolute; top:6px; left:6px; background:rgba(0,0,0,0.75); color:#fff; font-size:11px; padding:6px 8px; border-radius:6px; display:none; pointer-events:none;">
+            <div>Google Safe Browsing: <span id="gsbScoreText">--</span></div>
+            <div>VirusTotal: <span id="vtScoreText">--</span></div>
+          </div>
+        </div>
+        <div class="score-title">Legit Score</div>
+      </div>
+      
+      <div class="toggle-container">
+        <button class="toggle-switch active" id="autoToggle" aria-pressed="true" aria-label="Auto check toggle"></button>
+        <span class="toggle-label" id="toggleLabel">ON</span>
+      </div>
+      
+      <div class="stats-panel">
+        <div class="stats-title">Stats</div>
+        <div class="stat-row">
+          <div class="stat-left">
+            <div class="stat-icon"><img src="assets/Vector.svg" alt="Domain"></div>
+            <span class="stat-label">Domain</span>
+          </div>
+          <span class="stat-value" id="domainValue">--</span>
+        </div>
+        <div class="stat-row">
+          <div class="stat-left">
+            <div class="stat-icon"><img src="assets/Vector-1.svg" alt="HTTPS"></div>
+            <span class="stat-label">HTTPS</span>
+          </div>
+          <span class="stat-value" id="httpsValue">--</span>
+        </div>
+        <div class="stat-row">
+          <div class="stat-left">
+            <div class="stat-icon"><img src="assets/Vector-2.svg" alt="Last Checked"></div>
+            <span class="stat-label">Last Checked</span>
+          </div>
+          <span class="stat-value" id="lastCheckedValue">--</span>
+        </div>
+      </div>
+      
+      <div class="buttons-container">
+        <button class="btn btn-primary" id="recheckBtn">
+          <span>Recheck Page</span>
+        </button>
+        <button class="btn btn-secondary" id="reportBtn">
+          <span>Repost False Positive</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
