@@ -121,6 +121,5 @@ For detailed behavior, see `main-extension/README.md`.
 - Popup UI in `main-extension/popup.html` and logic in `main-extension/popup.js`
 - Icons and images in `main-extension/assets/`
 
-## License
+## Contributions
 
-MIT
